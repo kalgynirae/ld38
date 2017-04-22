@@ -8,7 +8,8 @@ from pyglet.sprite import Sprite
 from pyglet.window import key, Window
 
 fps = 30
-left, down, up, right = (-1, 0), (0, -1), (0, 1), (1, 0)
+left, down, up, right, nodir = (-1, 0), (0, -1), (0, 1), (1, 0), (0, 0)
+black, white = (0, 0, 0, 200), (255, 255, 255, 255)
 movement = {
     key.H: left,
     key.J: down,
@@ -26,10 +27,9 @@ images['bg'] = pyglet.image.load('art/bg.png')
 images['fish-left'] = pyglet.image.load('art/fish-left.png').get_texture()
 images['fish-right'] = images['fish-left'].get_transform(flip_x=True)
 images['fish-front'] = pyglet.image.load('art/fish-front.png').get_texture()
-    if name != 'bg':
-        i.anchor_x = i.width // 2
-        i.anchor_y = i.height // 2
-    images[name] = i
+for image in images.values():
+    image.anchor_x = image.width // 2
+    image.anchor_y = image.height // 2
 
 label = partial(
     Label,
@@ -53,40 +53,81 @@ def move(obj, direction, multipliers):
         obj.move(new_x, new_y)
         yield
 
+to_update = []
+
 class Fish:
     def __init__(self, name):
-        self.label = label(name, batch=sprite_batch)
-        self.sprites = [
-            Sprite(
-                images['fish'],
-                batch=sprite_batch,
-            ),
-            Sprite(
-                images['fish'].get_transform(flip_x=True),
-                batch=sprite_batch,
-            ),
+        self.labels = [
+            label(name, batch=sprite_batch, color=black),
+            label(name, batch=sprite_batch, color=black),
+            label(name, batch=sprite_batch, color=black),
+            label(name, batch=sprite_batch, color=black),
+            label(name, batch=sprite_batch, color=white),
         ]
-
-    def move(self, x, y):
-        self.sprite.x = x
-        self.sprite.y = y
-        self.label.x = x
-        self.label.y = y + self.sprite.height // 2 + 4
+        self.sprites = {
+            'left': Sprite(images['fish-left'], batch=sprite_batch),
+            'front': Sprite(images['fish-front'], batch=sprite_batch),
+            'right': Sprite(images['fish-right'], batch=sprite_batch),
+        }
+        for sprite in self.sprites.values():
+            sprite.anchor_x = sprite.width // 2
+            sprite.anchor_y = sprite.height // 2
+            sprite.visible = False
+        self.sprites['left'].visible = True
+        self.direction = 'left'
+        self.actions = []
+        to_update.append(self)
 
     @property
     def x(self):
-        return self.sprite.x
+        return self.sprites['left'].x
 
     @property
     def y(self):
-        return self.sprite.y
+        return self.sprites['left'].y
+
+    def move(self, x, y):
+        for sprite in self.sprites.values():
+            sprite.x = x
+            sprite.y = y
+        for label, offset in zip(self.labels, [left, down, up, right, nodir]):
+            ox, oy = offset
+            label.x = x + ox
+            label.y = y + self.sprites['left'].height // 2 + 4 + oy
+
+    def update(self, dt):
+        oldx, oldy = self.x, self.y
+        still_actions = []
+        for action in self.actions:
+            try:
+                next(action)
+            except StopIteration:
+                pass
+            else:
+                still_actions.append(action)
+        self.actions[:] = still_actions
+
+        dx, dy = oldx - self.x, oldy - self.y
+        if dx > 0:
+            newdir = 'left'
+        elif dx < 0:
+            newdir = 'right'
+        else:
+            newdir = self.direction
+        if newdir != self.direction:
+            self.sprites[self.direction].visible = False
+            self.sprites['front'].visible = True
+        else:
+            self.sprites[self.direction].visible = True
+            self.sprites['front'].visible = False
+        self.direction = newdir
 
 
 actions = []
 player = Fish('T. Jefferson')
 player.move(**centered)
 window = Window(width, height)
-bg = Sprite(images['bg'])
+bg = Sprite(images['bg'], **centered)
 
 
 @window.event
@@ -100,20 +141,13 @@ def on_key_press(symbol, modifiers):
     if symbol in [key.Q, key.ESCAPE]:
         pyglet.app.exit()
     elif symbol in movement:
-        actions.append(move(player, movement[symbol], push()))
+        player.actions.append(move(player, movement[symbol], push()))
     else:
         print(symbol)
 
 def update(dt):
-    still_go = []
-    for action in actions:
-        try:
-            next(action)
-        except StopIteration:
-            pass
-        else:
-            still_go.append(action)
-    actions[:] = still_go
+    for obj in to_update:
+        obj.update(dt)
 
 pyglet.clock.schedule_interval(update, 1 / fps)
 pyglet.app.run()
