@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     install_requires=[
-        'cocos2d',
+        'pyglet',
     ],
     name='game',
     packages=find_packages(),
