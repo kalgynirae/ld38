@@ -90,7 +90,7 @@ class Fish:
         for sprite in self.sprites.values():
             sprite.x = x
             sprite.y = y
-        for label, offset in zip(self.labels, [left, down, up, right, nodir]):
+        for label, offset in zip(self.labels, [(1, 1), (1, -1), (-1, 1), (-1, -1), (0, 0)]):
             ox, oy = offset
             label.x = x + ox
             label.y = y + self.sprites['left'].height // 2 + 4 + oy
@@ -143,7 +143,7 @@ def on_key_press(symbol, modifiers):
     elif symbol in movement:
         player.actions.append(move(player, movement[symbol], push()))
     else:
-        print(symbol)
+        print('symbol', symbol)
 
 def update(dt):
     for obj in to_update:
