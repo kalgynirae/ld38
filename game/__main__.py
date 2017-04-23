@@ -25,6 +25,10 @@ movement = {
     'j': Dir.s,
     'k': Dir.n,
     'l': Dir.e,
+    'a': Dir.w,
+    's': Dir.s,
+    'w': Dir.n,
+    'd': Dir.e,
     key.MOTION_LEFT: Dir.w,
     key.MOTION_DOWN: Dir.s,
     key.MOTION_UP: Dir.n,
@@ -32,6 +36,7 @@ movement = {
 }
 _push = [5, 5, 5, 5, 5, 4, 4, 4, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1]
 #_push = [5, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1]
+_bounce = [4, -2, -1, -1]
 gridsize = sum(_push)
 width, height = 1280, 720
 center = {'x': width // 2, 'y': height // 2}
@@ -40,7 +45,7 @@ gridheight = height // gridsize
 gridxoffset = (width - gridwidth * gridsize) // 2 + gridsize // 2
 gridyoffset = (height - gridheight * gridsize) // 2 + gridsize // 2
 images = {}
-images['bg'] = pyglet.image.load('art/bg.png')
+images['bg'] = pyglet.image.load('art/bg.png').get_texture()
 images['fish-left'] = pyglet.image.load('art/fish-left.png').get_texture()
 images['fish-right'] = images['fish-left'].get_transform(flip_x=True)
 images['fish-front'] = pyglet.image.load('art/fish-front.png').get_texture()
@@ -51,6 +56,11 @@ images['bubble1'] = pyglet.image.load('art/bubble1.png').get_texture()
 images['bubble2'] = pyglet.image.load('art/bubble2.png').get_texture()
 images['bubble3'] = pyglet.image.load('art/bubble3.png').get_texture()
 images['bubble4'] = pyglet.image.load('art/bubble4.png').get_texture()
+images['bubble5'] = pyglet.image.load('art/bubble3.png').get_texture()
+images['bubble6'] = pyglet.image.load('art/bubble2.png').get_texture()
+images['wall'] = pyglet.image.load('art/wall.png').get_texture()
+images['star1'] = pyglet.image.load('art/star1.png').get_texture()
+images['star2'] = pyglet.image.load('art/star2.png').get_texture()
 for image in images.values():
     image.anchor_x = image.width // 2
     image.anchor_y = image.height // 2
@@ -72,8 +82,8 @@ class CollisionRect:
     def __init__(self, obj):
         self.x = obj.x - obj.width // 2
         self.y = obj.y - obj.height // 2
-        self.width = obj.width - 32
-        self.height = obj.height - 32
+        self.width = obj.width - 24
+        self.height = obj.height - 24
 
 
 _collisions = set()
@@ -98,87 +108,7 @@ def collides(a, b):
         return False
 
 
-class ObjBase:
-    def place(self, x, y):
-        pass
-
-    def update(self, dt):
-        pass
-
-
-_collidables = []
-class Collidable:
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        _collidables.append(self)
-
-    def get_colliding_objs(self):
-        for obj in _collidables:
-            if collides(self, obj):
-                yield obj
-
-    def collision(self, other):
-        pass
-
-    def update(self, dt):
-        for obj in self.get_colliding_objs():
-            self.collision(obj)
-            if isinstance(obj, Collidable):
-                obj.collision(self)
-        super().update(dt)
-
-
-class Obj(Collidable, ObjBase):
-    def __init__(self, *, name=None, width, height):
-        super().__init__()
-        _to_update.append(self)
-        self._x, self._y = 0, 0
-        self.width, self.height = width, height
-        self.actions = {}
-        self._ids = itertools.count()
-        self.parts = []
-        if name:
-            self.parts.append(Label(text=name, offset=(0, height // 2 + 4)))
-        else:
-            self.labels = []
-
-    @property
-    def x(self):
-        return self._x
-
-    @property
-    def y(self):
-        return self._y
-
-    def act(self, iterator, *, id=None):
-        if id is None:
-            id = next(self._ids)
-        self.actions[id] = iterator
-
-    def is_done(self):
-        return True
-
-    def place(self, x, y):
-        for part in self.parts:
-            if isinstance(part, ObjBase):
-                part.place(x, y)
-            else:
-                part.x = x
-                part.y = y
-        self._x = x
-        self._y = y
-        super().place(x, y)
-
-    def update(self, dt):
-        for id, action in list(self.actions.items()):
-            try:
-                next(action)
-            except StopIteration:
-                del self.actions[id]
-        super().update(dt)
-
-
-class Label(ObjBase):
+class Label:
     def __init__(self, *, text, offset):
         super().__init__()
         self.labels = [
@@ -210,7 +140,139 @@ class Label(ObjBase):
         for label, (dx, dy) in zip(self.labels, self.shadowdirs):
             label.x = x + dx + ox
             label.y = y + dy + oy
-        super().place(x, y)
+
+    def update(self, dt):
+        pass
+
+
+class Animated:
+    def __init__(self, *, imageprefix, delay, **kwargs):
+        batch = _batches[type(self).__name__.lower()]
+        self.frames = [
+            Sprite(image, batch=batch)
+            for name, image in sorted(images.items())
+            if name.startswith(imageprefix)
+        ]
+        super().__init__(
+            **kwargs,
+            width=self.frames[0].width,
+            height=self.frames[0].height,
+        )
+        self.parts.extend(self.frames)
+        self.delay = delay
+        self.frame = 0
+        self.paused = False
+        self.act(self.animate_iter(), id='animation')
+
+    def animate_iter(self):
+        while True:
+            if not self.paused:
+                self.frame = (self.frame + 1) % len(self.frames)
+                for sprite in self.frames:
+                    sprite.visible = False
+                self.frames[self.frame].visible = True
+            for _ in range(self.delay):
+                yield
+
+    def pause_animation(self):
+        self.paused = True
+
+
+_collidables = set()
+class Collidable:
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        _collidables.add(self)
+
+    def collide(self, other):
+        raise NotImplementedError
+
+    def delete(self):
+        _collidables.remove(self)
+        super().delete()
+
+
+class GridCollidable:
+    def grid_collide(self, other):
+        raise NotImplementedError
+
+
+class Obj:
+    def __init__(self, *, name=None, width, height):
+        super().__init__()
+        _to_update.append(self)
+        self._x, self._y = 0, 0
+        self.width, self.height = width, height
+        self.actions = {}
+        self._ids = itertools.count()
+        self.parts = []
+        self.deleted = False
+        if name:
+            self.parts.append(Label(text=name, offset=(0, height // 2 + 4)))
+        else:
+            self.labels = []
+
+    @property
+    def x(self):
+        return self._x
+
+    @property
+    def y(self):
+        return self._y
+
+    def act(self, iterator, *, id=None):
+        if id is None:
+            id = next(self._ids)
+        self.actions[id] = iterator
+
+    def check_collisions(self):
+        for obj in _collidables.copy():
+            if obj == self:
+                continue
+            if collides(self, obj):
+                print(f'collision between {self!r} and {obj!r}')
+                obj.collide(self)
+        for obj in self.world.neighbors(self):
+            if isinstance(obj, GridCollidable):
+                print(f'grid collision between {self!r} and {obj!r}')
+                obj.grid_collide(self)
+
+    def delete(self):
+        self.parts = [part for part in self.parts if not isinstance(part, Label)]
+        self.act(self.delete_iter(), id='delete')
+
+    def delete_iter(self):
+        for _ in range(3):
+            for part in self.parts:
+                part.scale += 1
+                part.opacity -= 64
+            yield
+        self.world.remove(self)
+        for part in self.parts:
+            part.delete()
+        self.deleted = True
+
+    def is_done(self):
+        return True
+
+    def place(self, x, y):
+        for part in self.parts:
+            if isinstance(part, (Obj, Label)):
+                part.place(x, y)
+            else:
+                part.x = x
+                part.y = y
+        self._x = x
+        self._y = y
+
+    def update(self, dt):
+        for id, action in list(self.actions.items()):
+            try:
+                next(action)
+            except StopIteration:
+                del self.actions[id]
+        if not self.deleted:
+            self.check_collisions()
 
 
 class Fish(Obj):
@@ -229,6 +291,7 @@ class Fish(Obj):
             sprite.visible = False
         self.sprites['left'].visible = True
         self.direction = 'left'
+        self.frozen = False
 
     def face(self, direction):
         dx, _ = direction
@@ -252,11 +315,15 @@ class Fish(Obj):
         self.sprites[dir].visible = True
 
     def move(self, dir):
-        if self.map.try_move(self, dir):
-            self.act(self.move_iter(dir))
+        if self.world.try_move(self, dir):
+            self.act(self.move_iter(dir, _push))
+            return True
+        else:
+            self.act(self.move_iter(dir, _bounce))
+            return False
 
-    def move_iter(self, dir):
-        for amount in _push:
+    def move_iter(self, dir, amounts):
+        for amount in amounts:
             dx, dy = dir
             new_x = self.x + dx*amount
             new_y = self.y + dy*amount
@@ -264,7 +331,7 @@ class Fish(Obj):
             yield
 
 
-class Field(Obj):
+class Field(Collidable, Obj):
     def __init__(self, *, batch=None, **kwargs):
         super().__init__(**kwargs, height=images['field-red'].height, width=images['field-red'].width)
         batch = batch or _batches[type(self).__name__.lower()]
@@ -285,48 +352,77 @@ class Field(Obj):
         self.sprites[state].visible = True
         self.state = state
 
-    def collision(self, other):
-        self.advance()
+    def collide(self, other):
+        if isinstance(other, Fish) and not other.frozen:
+            self.advance()
 
     def is_done(self):
         return self.state == 2
 
 
-class Bubble(Obj):
+class Wall(Obj):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs, width=images['bubble1'].width, height=images['bubble1'].height)
-        self.sprites = [
-            Sprite(images['bubble1'], batch=_batches['bubble']),
-            Sprite(images['bubble2'], batch=_batches['bubble']),
-            Sprite(images['bubble3'], batch=_batches['bubble']),
-            Sprite(images['bubble4'], batch=_batches['bubble']),
-            Sprite(images['bubble3'], batch=_batches['bubble']),
-            Sprite(images['bubble2'], batch=_batches['bubble']),
-        ]
-        self.parts.extend(self.sprites)
-        self.frame = 0
-        self.act(self.animate_iter())
+        super().__init__(**kwargs, width=images['wall'].width, height=images['wall'].height)
+        self.sprite = Sprite(images['wall'], batch=_batches['wall'])
+        self.parts.append(self.sprite)
 
-    def animate_iter(self):
+
+class Bubble(Animated, Collidable, GridCollidable, Obj):
+    def __init__(self, **kwargs):
+        super().__init__(
+            **kwargs,
+            imageprefix='bubble',
+            delay=3,
+        )
+        self.captured = None
+
+    def collide(self, other):
+        print('collide!')
+        if other == self.captured:
+            self.act(self.rise_iter(), id='rise')
+
+    def grid_collide(self, other):
+        if isinstance(other, Fish) and not other.frozen:
+            other.frozen = True
+            self.captured = other
+
+    def rise_iter(self):
         while True:
-            self.frame = (self.frame + 1) % len(self.sprites)
-            for sprite in self.sprites:
-                sprite.visible = False
-            self.sprites[self.frame].visible = True
-            for _ in range(3):
-                yield
+            if self.world.try_move(self.captured, Dir.n):
+                yield from zip(
+                    Fish.move_iter(self, Dir.n, _push),
+                    self.captured.move_iter(Dir.n, _push),
+                )
+            else:
+                break
+        self.captured.frozen = False
+        self.delete()
 
 
-player = Fish(name='T. Jefferson')
-window = Window(width, height)
-bg = Sprite(images['bg'], **center)
+class Star(Animated, Collidable, Obj):
+    def __init__(self, **kwargs):
+        super().__init__(
+            **kwargs,
+            imageprefix='star',
+            delay=10,
+        )
+        self.captured = None
+
+    def collide(self, other):
+        if isinstance(other, Fish) and not other.frozen:
+            self.delete()
 
 
-class Map:
+class World:
     def __init__(self, width, height):
         self.grid = defaultdict(set)
         self.width = width
         self.height = height
+        self.moved_this_update = False
+
+    def check_done(self, dt):
+        if all(obj.is_done() for objs in self.grid.values() for obj in objs):
+            print('done!')
 
     def locate(self, obj):
         for loc, objs in self.grid.items():
@@ -334,12 +430,17 @@ class Map:
                 return loc
         raise ValueError('{obj!r} is not in the grid')
 
+    def neighbors(self, obj):
+        return self.grid[self.locate(obj)] - {obj}
+
     def try_move(self, obj, dir):
         dx, dy = dir
         gx, gy = self.locate(obj)
         nx = gx + dx
         ny = gy + dy
         if 0 <= nx < self.width and 0 <= ny < self.height:
+            if any(isinstance(obj, Wall) for obj in self.grid[nx, ny]):
+                return False
             self.grid[gx, gy].remove(obj)
             self.grid[nx, ny].add(obj)
             return True
@@ -348,38 +449,53 @@ class Map:
 
     def put(self, obj, gx, gy):
         self.grid[gx, gy].add(obj)
-        obj.map = self
+        obj.world = self
         x = gx * gridsize + gridxoffset
         y = gy * gridsize + gridyoffset
         obj.place(x, y)
 
+    def remove(self, obj):
+        gx, gy = self.locate(obj)
+        self.grid[gx, gy].remove(obj)
+
     def spawn(self, type, gx, gy):
         self.put(type(), gx, gy)
 
-map = Map(gridwidth, gridheight)
-for (gx, gy), char in maps.parse(maps.map1):
-    if char == '#':
-        map.spawn(Field, gx, gy)
-    elif char == 's':
-        map.put(player, gx, gy)
-    elif char == 'o':
-        map.spawn(Bubble, gx, gy)
+    def update_all(self, dt):
+        for obj in list(itertools.chain.from_iterable(map(list, self.grid.values()))):
+            obj.update(dt)
+        self.moved_this_update = False
 
-def check_done(dt):
-    if all(obj.is_done() for objs in map.grid.values() for obj in objs):
-        print('done!')
-pyglet.clock.schedule_interval(check_done, 10 / fps)
+
+window = Window(width, height)
+player = Fish(name='T. Jefferson')
+bg = Sprite(images['bg'], **center)
+world = World(gridwidth, gridheight)
+for (gx, gy), char in maps.parse(maps.map2):
+    if char == '#':
+        world.spawn(Field, gx, gy)
+    elif char == 's':
+        world.put(player, gx, gy)
+    elif char == 'o':
+        world.spawn(Bubble, gx, gy)
+    elif char == 'w':
+        world.spawn(Wall, gx, gy)
+    elif char == '*':
+        world.spawn(Star, gx, gy)
 
 
 def exit(dt):
     window.close()
     pyglet.app.exit()
 
+
 @window.event
 def on_draw():
     window.clear()
     bg.draw()
     _batches['field'].draw()
+    _batches['wall'].draw()
+    _batches['star'].draw()
     _batches['fish'].draw()
     _batches['bubble'].draw()
     _batches['label'].draw()
@@ -394,7 +510,9 @@ def on_text(text):
     if text in ['q']:
         pyglet.clock.schedule(exit)
     elif text in movement:
-        player.move(movement[text])
+        if not player.frozen and not world.moved_this_update:
+            player.move(movement[text])
+            world.moved_this_update = True
         player.face(movement[text])
     else:
         print(f'text {text!r}')
@@ -403,9 +521,7 @@ def on_text(text):
 def on_text_motion(motion):
     on_text(motion)
 
-def update(dt):
-    for obj in _to_update:
-        obj.update(dt)
 
-pyglet.clock.schedule_interval(update, 1 / fps)
+pyglet.clock.schedule_interval(world.update_all, 1 / fps)
+pyglet.clock.schedule_interval(world.check_done, 10 / fps)
 pyglet.app.run()

@@ -4,11 +4,24 @@ map1 = """
    #
    #        o
            o#o
-           #s#o
+          w#s#o
            o#o
-            o        #
-                     #
-                  ####
+            o       w#w
+                 wwww#w
+                 *####w
+                 wwwwww
+
+"""
+
+map2 = """
+    wwwwwwwwwwwwww
+    w            w
+    w   *        w
+    w  *  *      w
+    w       *    w
+    w s   *      w
+    w            w
+    wwwwwwwwwwwwww
 
 
 """
