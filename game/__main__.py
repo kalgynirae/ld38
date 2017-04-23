@@ -69,7 +69,7 @@ for image in images.values():
 sounds = {}
 sounds['music-intro'] = pyglet.media.load('sound/music-intro.wav')
 sounds['music-loop'] = pyglet.media.load('sound/music-loop.wav')
-for name in 'blip shortblip bubble star reset pop'.split():
+for name in 'blip shortblip bubble star reset pop complete'.split():
     sound = pyglet.media.StaticSource(pyglet.media.load(f'sound/{name}.wav'))
     sounds[name] = sound
 
@@ -378,7 +378,7 @@ class Field(Collidable, Obj):
     def advance(self, state=None):
         if state is None:
             state = (self.state + 1) % len(self.sprites)
-            playsounds(*['shortblip']*(state-1), 'blip')
+            playsounds('blip')
         for sprite in self.sprites:
             sprite.visible = False
         self.sprites[state].visible = True
@@ -488,13 +488,23 @@ class World:
         def on_text(text):
             if text in ['q']:
                 pyglet.clock.schedule(self.exit)
-            elif self.mode == 'stop' and text in [' ', '\r']:
-                self.mapindex += 1
+            elif (
+                (self.mode == 'stop' and text in [' ', '\r']) or
+                (self.mode == 'go' and text in ['[', ']'])
+            ):
+                if text == '[':
+                    if self.mapindex > 0:
+                        self.mapindex -= 1
+                elif text == ']':
+                    if self.mapindex < len(self.maps) - 1:
+                        self.mapindex += 1
+                else:
+                    self.mapindex += 1
                 if self.mapindex < len(self.maps):
                     self.reset()
                 else:
-                    print('You finished!')
-                    pyglet.clock.schedule(self.exit)
+                    self.mode = 'finished'
+                    self.set_instruction('No further puzzles exist :(  Press Q to exit.')
             elif self.mode == 'go' and text in movement:
                 if not self.player.frozen and not self.moved_this_update:
                     self.player.move(movement[text])
@@ -502,8 +512,8 @@ class World:
                 self.player.face(movement[text])
             elif self.mode == 'go' and text in ['r']:
                 self.mode = 'reset'
-            else:
-                print(f'text {text!r}')
+            #else:
+            #    print(f'text {text!r}')
 
         @self.window.event
         def on_text_motion(motion):
@@ -514,7 +524,7 @@ class World:
         music.queue(sounds['music-intro'])
         music.queue(sounds['music-loop'])
         self.musicplayer.queue(music)
-        self.musicplayer.volume = 0.7
+        self.musicplayer.volume = 0.6
         self.musicplayer.play()
 
         @self.musicplayer.event
@@ -614,6 +624,7 @@ class World:
             pyglet.clock.unschedule(world.update_all)
             self.complete.visible = True
             self.set_instruction('Press <Space> or <Enter> to continue')
+            playsounds('complete')
         self.moved_this_update = False
 
     def exit(self, dt):
