@@ -1,31 +1,33 @@
-map1 = """
-
-   ####
-   #
-   #        o
-           o#o
-          w#s#o
-           o#o
-            o       w#w
-                 wwww#w
-                 *####w
-                 wwwwww
-
+maps = [
 """
 
-map2 = """
-    wwwwwwwwwwwww
-    w rrrrrrrrr w
-    wpwwwwwwwwwrw
-    w rrrrrrrrr w
-    wrwwwwwwwwwyw
-    w yyyyyyyyy w
-    wrwwwwwwwwwww
-    woyyyyyyyyysw
-    wwwwwwwwwwwww
+   yyyy
+   y
+   y        o
+           oyo
+          #ysyo
+           oyo
+            o       #y#
+                 ####y#
+                 *yyyy#
+                 ######
 
+""",
 
 """
+    #############
+    # rrrrrrrrr #
+    #p#########r#
+    # rrrrrrrrr #
+    #r#########y#
+    # yyyyyyyyy #
+    #r###########
+    #oyyyyyyyyys#
+    #############
+
+
+""",
+]
 
 def parse(map):
     lines = map.splitlines()

@@ -5,7 +5,6 @@ from functools import partial
 import itertools
 
 import pyglet
-from pyglet.text import Label
 from pyglet.sprite import Sprite
 from pyglet.window import key
 
@@ -40,6 +39,7 @@ _bounce = [4, -2, -1, -1]
 gridsize = sum(_push)
 width, height = 1280, 720
 center = {'x': width // 2, 'y': height // 2}
+instructioncenter = {'x': width // 2, 'y': 40}
 gridwidth = width // gridsize
 gridheight = height // gridsize
 gridxoffset = (width - gridwidth * gridsize) // 2 + gridsize // 2
@@ -61,16 +61,26 @@ images['bubble6'] = pyglet.image.load('art/bubble2.png').get_texture()
 images['wall'] = pyglet.image.load('art/wall.png').get_texture()
 images['star1'] = pyglet.image.load('art/star1.png').get_texture()
 images['star2'] = pyglet.image.load('art/star2.png').get_texture()
+images['complete'] = pyglet.image.load('art/complete.png').get_texture()
 for image in images.values():
     image.anchor_x = image.width // 2
     image.anchor_y = image.height // 2
 
+_batches = defaultdict(pyglet.graphics.Batch)
+
 label = partial(
-    Label,
+    pyglet.text.Label,
     anchor_x='center',
     anchor_y='baseline',
     bold=True,
     font_size=8,
+)
+biglabel = partial(
+    pyglet.text.Label,
+    anchor_x='center',
+    anchor_y='baseline',
+    bold=True,
+    font_size=18,
 )
 
 
@@ -105,18 +115,18 @@ def collides(a, b):
 
 
 class Label:
-    def __init__(self, *, text, offset):
+    def __init__(self, *, text, offset=Dir.none, type=label):
         super().__init__()
         self.labels = [
-            label(text, batch=_batches['label'], color=Color.black),
-            label(text, batch=_batches['label'], color=Color.black),
-            label(text, batch=_batches['label'], color=Color.black),
-            label(text, batch=_batches['label'], color=Color.black),
-            label(text, batch=_batches['label'], color=Color.black),
-            label(text, batch=_batches['label'], color=Color.black),
-            label(text, batch=_batches['label'], color=Color.black),
-            label(text, batch=_batches['label'], color=Color.black),
-            label(text, batch=_batches['label'], color=Color.white),
+            type(text, batch=_batches['label'], color=Color.black),
+            type(text, batch=_batches['label'], color=Color.black),
+            type(text, batch=_batches['label'], color=Color.black),
+            type(text, batch=_batches['label'], color=Color.black),
+            type(text, batch=_batches['label'], color=Color.black),
+            type(text, batch=_batches['label'], color=Color.black),
+            type(text, batch=_batches['label'], color=Color.black),
+            type(text, batch=_batches['label'], color=Color.black),
+            type(text, batch=_batches['label'], color=Color.white),
         ]
         self.shadowdirs = [
             Dir.w,
@@ -130,6 +140,10 @@ class Label:
             Dir.none,
         ]
         self.offset = offset
+
+    def delete(self):
+        for label in self.labels:
+            label.delete()
 
     def place(self, x, y):
         ox, oy = self.offset
@@ -203,9 +217,10 @@ class Obj:
         self.deleted = False
         self.disable_collision = False
         if name:
-            self.parts.append(Label(text=name, offset=(0, height // 2 + 4)))
+            self.label = Label(text=name, offset=(0, height // 2 + 4))
+            self.parts.append(self.label)
         else:
-            self.labels = []
+            self.label = None
 
     @property
     def x(self):
@@ -226,14 +241,16 @@ class Obj:
                 if obj == self:
                     continue
                 if collides(self, obj):
-                    print(f'collision between {self!r} and {obj!r}')
+                    #print(f'collision between {self!r} and {obj!r}')
                     obj.collide(self)
         for obj in self.world.neighbors(self):
             if isinstance(obj, GridCollidable):
-                print(f'grid collision between {self!r} and {obj!r}')
+                #print(f'grid collision between {self!r} and {obj!r}')
                 obj.grid_collide(self)
 
     def delete(self):
+        if self.label is not None:
+            self.label.delete()
         self.parts = [part for part in self.parts if not isinstance(part, Label)]
         self.act(self.delete_iter(), id='delete')
 
@@ -376,7 +393,6 @@ class Bubble(Animated, Collidable, GridCollidable, Obj):
         self.captured = None
 
     def collide(self, other):
-        print('collide!')
         if other == self.captured:
             other.disable_collision = True
             self.act(self.rise_iter(), id='rise')
@@ -415,12 +431,16 @@ class Star(Animated, Collidable, Obj):
 
 
 class World:
-    def __init__(self, *, map):
+    def __init__(self, *, maps):
         self.grid = defaultdict(set)
         self.width = gridwidth
         self.height = gridheight
-        self.map = map
+        self.maps = maps
+        self.mapindex = 0
         self.bg = Sprite(images['bg'], **center)
+        self.complete = Sprite(images['complete'], **center)
+        self.complete.visible = False
+        self.instruction = None
         self.reset()
         self.window = pyglet.window.Window(width, height)
 
@@ -434,6 +454,7 @@ class World:
             _batches['fish'].draw()
             _batches['bubble'].draw()
             _batches['label'].draw()
+            self.complete.draw()
 
         @self.window.event
         def on_key_press(symbol, modifiers):
@@ -444,13 +465,20 @@ class World:
         def on_text(text):
             if text in ['q']:
                 pyglet.clock.schedule(self.exit)
-            elif text in movement:
+            elif self.mode == 'stop' and text in [' ', '\r']:
+                self.mapindex += 1
+                if self.mapindex < len(self.maps):
+                    self.reset()
+                else:
+                    print('You finished!')
+                    pyglet.clock.schedule(self.exit)
+            elif self.mode == 'go' and text in movement:
                 if not self.player.frozen and not self.moved_this_update:
                     self.player.move(movement[text])
                     self.moved_this_update = True
                 self.player.face(movement[text])
-            elif text in ['r']:
-                self.reset()
+            elif self.mode == 'go' and text in ['r']:
+                self.mode = 'reset'
             else:
                 print(f'text {text!r}')
 
@@ -459,15 +487,19 @@ class World:
             on_text(motion)
 
     def reset(self):
-        global _batches
         for obj in self.objs():
             obj.delete()
-        _batches = defaultdict(pyglet.graphics.Batch)
+        _batches.clear()
+        self.mode = 'go'
+        self.set_instruction('Use ←↓↑→ or WASD to move. Press R to reset.')
+        pyglet.clock.unschedule(self.update_all)
+        pyglet.clock.schedule_interval(self.update_all, 1 / fps)
+        self.complete.visible = False
         self.grid = defaultdict(set)
         self.collidables = set()
         self.moved_this_update = False
         self.player = Fish(name='T. Jefferson')
-        for (gx, gy), char in maps.parse(self.map):
+        for (gx, gy), char in maps.parse(self.maps[self.mapindex]):
             if char == 'y':
                 self.spawn(Field, gx, gy, state=0)
             elif char == 'r':
@@ -478,14 +510,13 @@ class World:
                 self.put(self.player, gx, gy)
             elif char == 'o':
                 self.spawn(Bubble, gx, gy)
-            elif char == 'w':
+            elif char == '#':
                 self.spawn(Wall, gx, gy)
             elif char == '*':
                 self.spawn(Star, gx, gy)
 
-    def check_done(self):
-        if all(obj.is_done() for objs in self.grid.values() for obj in objs):
-            print('done!')
+    def is_complete(self):
+        return all(obj.is_done() for objs in self.grid.values() for obj in objs)
 
     def locate(self, obj):
         for loc, objs in self.grid.items():
@@ -510,6 +541,12 @@ class World:
         gx, gy = self.locate(obj)
         self.grid[gx, gy].remove(obj)
 
+    def set_instruction(self, text):
+        if self.instruction is not None:
+            self.instruction.delete()
+        self.instruction = Label(text=text, type=biglabel)
+        self.instruction.place(**instructioncenter)
+
     def spawn(self, type, gx, gy, **kwargs):
         self.put(type(**kwargs), gx, gy)
 
@@ -528,16 +565,21 @@ class World:
             return False
 
     def update_all(self, dt):
+        if self.mode == 'reset':
+            self.reset()
         for obj in self.objs():
             obj.update(dt)
-        self.check_done()
+        if self.is_complete():
+            self.mode = 'stop'
+            pyglet.clock.unschedule(world.update_all)
+            self.complete.visible = True
+            self.set_instruction('Press <Space> or <Enter> to continue')
         self.moved_this_update = False
 
     def exit(self, dt):
-        self.close()
+        self.window.close()
         pyglet.app.exit()
 
 
-world = World(map=maps.map2)
-pyglet.clock.schedule_interval(world.update_all, 1 / fps)
+world = World(maps=maps.maps)
 pyglet.app.run()
