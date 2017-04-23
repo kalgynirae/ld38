@@ -65,6 +65,20 @@ images['complete'] = pyglet.image.load('art/complete.png').get_texture()
 for image in images.values():
     image.anchor_x = image.width // 2
     image.anchor_y = image.height // 2
+sounds = {}
+sounds['music-intro'] = pyglet.media.load('sound/music-intro.wav')
+sounds['music-loop'] = pyglet.media.load('sound/music-loop.wav')
+for name in 'blip shortblip bubble star reset'.split():
+    sound = pyglet.media.StaticSource(pyglet.media.load(f'sound/{name}.wav'))
+    sounds[name] = sound
+
+_players = []
+def playsounds(*names):
+    player = pyglet.media.Player()
+    _players.append(player)
+    for name in names:
+        player.queue(sounds[name])
+    player.play()
 
 _batches = defaultdict(pyglet.graphics.Batch)
 
@@ -363,6 +377,7 @@ class Field(Collidable, Obj):
     def advance(self, state=None):
         if state is None:
             state = (self.state + 1) % len(self.sprites)
+            playsounds(*['shortblip']*(state-1), 'blip')
         for sprite in self.sprites:
             sprite.visible = False
         self.sprites[state].visible = True
@@ -405,6 +420,7 @@ class Bubble(Animated, Collidable, GridCollidable, Obj):
     def rise_iter(self):
         while True:
             if self.world.try_move(self.captured, Dir.n):
+                playsounds('bubble')
                 yield from zip(
                     Fish.move_iter(self, Dir.n, _push),
                     self.captured.move_iter(Dir.n, _push),
@@ -427,6 +443,7 @@ class Star(Animated, Collidable, Obj):
 
     def collide(self, other):
         if isinstance(other, Fish) and not other.frozen:
+            playsounds('star')
             self.delete()
 
 
@@ -486,9 +503,24 @@ class World:
         def on_text_motion(motion):
             on_text(motion)
 
+        self.musicplayer = pyglet.media.Player()
+        music = pyglet.media.SourceGroup(sounds['music-intro'].audio_format, None)
+        music.queue(sounds['music-intro'])
+        music.queue(sounds['music-loop'])
+        self.musicplayer.queue(music)
+        self.musicplayer.volume = 0.7
+        self.musicplayer.play()
+
+        @self.musicplayer.event
+        def on_eos():
+            music.loop = True
+
     def reset(self):
         for obj in self.objs():
             obj.delete()
+        for player in _players:
+            player.delete()
+        _players.clear()
         _batches.clear()
         self.mode = 'go'
         self.set_instruction('Use ←↓↑→ or WASD to move. Press R to reset.')

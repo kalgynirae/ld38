@@ -4,9 +4,9 @@ maps = [
    yyyy
    y
    y        o
-           oyo
-          #ysyo
-           oyo
+           oy 
+          #ysy 
+           oy 
             o       #y#
                  ####y#
                  *yyyy#
