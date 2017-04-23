@@ -14,14 +14,15 @@ map1 = """
 """
 
 map2 = """
-    wwwwwwwwwwwwww
-    w            w
-    w   *        w
-    w  *  *      w
-    w       *    w
-    w s   *      w
-    w            w
-    wwwwwwwwwwwwww
+    wwwwwwwwwwwww
+    w rrrrrrrrr w
+    wpwwwwwwwwwrw
+    w rrrrrrrrr w
+    wrwwwwwwwwwyw
+    w yyyyyyyyy w
+    wrwwwwwwwwwww
+    woyyyyyyyyysw
+    wwwwwwwwwwwww
 
 
 """
