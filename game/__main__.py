@@ -62,13 +62,14 @@ images['wall'] = pyglet.image.load('art/wall.png').get_texture()
 images['star1'] = pyglet.image.load('art/star1.png').get_texture()
 images['star2'] = pyglet.image.load('art/star2.png').get_texture()
 images['complete'] = pyglet.image.load('art/complete.png').get_texture()
+images['title'] = pyglet.image.load('art/title.png').get_texture()
 for image in images.values():
     image.anchor_x = image.width // 2
     image.anchor_y = image.height // 2
 sounds = {}
 sounds['music-intro'] = pyglet.media.load('sound/music-intro.wav')
 sounds['music-loop'] = pyglet.media.load('sound/music-loop.wav')
-for name in 'blip shortblip bubble star reset'.split():
+for name in 'blip shortblip bubble star reset pop'.split():
     sound = pyglet.media.StaticSource(pyglet.media.load(f'sound/{name}.wav'))
     sounds[name] = sound
 
@@ -430,6 +431,7 @@ class Bubble(Animated, Collidable, GridCollidable, Obj):
         self.captured.frozen = False
         self.captured.disable_collision = False
         self.delete()
+        playsounds('pop')
 
 
 class Star(Animated, Collidable, Obj):
@@ -453,13 +455,16 @@ class World:
         self.width = gridwidth
         self.height = gridheight
         self.maps = maps
-        self.mapindex = 0
+        self.mapindex = -1
         self.bg = Sprite(images['bg'], **center)
+        self.title = Sprite(images['title'], **center)
         self.complete = Sprite(images['complete'], **center)
         self.complete.visible = False
         self.instruction = None
-        self.reset()
         self.window = pyglet.window.Window(width, height)
+
+        self.set_instruction('Press <Space> or <Enter> to start')
+        self.mode = 'stop'
 
         @self.window.event
         def on_draw():
@@ -472,6 +477,7 @@ class World:
             _batches['bubble'].draw()
             _batches['label'].draw()
             self.complete.draw()
+            self.title.draw()
 
         @self.window.event
         def on_key_press(symbol, modifiers):
@@ -527,6 +533,7 @@ class World:
         pyglet.clock.unschedule(self.update_all)
         pyglet.clock.schedule_interval(self.update_all, 1 / fps)
         self.complete.visible = False
+        self.title.visible = False
         self.grid = defaultdict(set)
         self.collidables = set()
         self.moved_this_update = False
@@ -546,6 +553,7 @@ class World:
                 self.spawn(Wall, gx, gy)
             elif char == '*':
                 self.spawn(Star, gx, gy)
+        playsounds('reset')
 
     def is_complete(self):
         return all(obj.is_done() for objs in self.grid.values() for obj in objs)
