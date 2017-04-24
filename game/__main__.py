@@ -71,7 +71,7 @@ sounds = {}
 sounds['music-intro'] = pyglet.media.load('sound/music-intro.wav')
 sounds['music-loop'] = pyglet.media.load('sound/music-loop.wav')
 for name in 'blip shortblip bubble star reset pop complete'.split():
-    sound = pyglet.media.StaticSource(pyglet.media.load(f'sound/{name}.wav'))
+    sound = pyglet.media.StaticSource(pyglet.media.load('sound/%s.wav' % name))
     sounds[name] = sound
 
 _players = []
@@ -257,11 +257,9 @@ class Obj:
                 if obj == self:
                     continue
                 if collides(self, obj):
-                    #print(f'collision between {self!r} and {obj!r}')
                     obj.collide(self)
         for obj in self.world.neighbors(self):
             if isinstance(obj, GridCollidable):
-                #print(f'grid collision between {self!r} and {obj!r}')
                 obj.grid_collide(self)
 
     def delete(self):
@@ -520,8 +518,6 @@ class World:
                 self.player.face(movement[text])
             elif self.mode == 'go' and text in ['r']:
                 self.mode = 'reset'
-            #else:
-            #    print(f'text {text!r}')
 
         @self.window.event
         def on_text_motion(motion):
