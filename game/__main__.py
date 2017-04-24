@@ -59,6 +59,7 @@ images['bubble4'] = pyglet.image.load('art/bubble4.png').get_texture()
 images['bubble5'] = pyglet.image.load('art/bubble3.png').get_texture()
 images['bubble6'] = pyglet.image.load('art/bubble2.png').get_texture()
 images['wall'] = pyglet.image.load('art/wall.png').get_texture()
+images['bwall'] = pyglet.image.load('art/bubblewall.png').get_texture()
 images['star1'] = pyglet.image.load('art/star1.png').get_texture()
 images['star2'] = pyglet.image.load('art/star2.png').get_texture()
 images['complete'] = pyglet.image.load('art/complete.png').get_texture()
@@ -399,6 +400,13 @@ class Wall(Obj):
         self.parts.append(self.sprite)
 
 
+class BubbleWall(Obj):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, width=images['bwall'].width, height=images['bwall'].height)
+        self.sprite = Sprite(images['bwall'], batch=_batches['wall'])
+        self.parts.append(self.sprite)
+
+
 class Bubble(Animated, Collidable, GridCollidable, Obj):
     def __init__(self, **kwargs):
         super().__init__(
@@ -561,6 +569,8 @@ class World:
                 self.spawn(Bubble, gx, gy)
             elif char == '#':
                 self.spawn(Wall, gx, gy)
+            elif char == '%':
+                self.spawn(BubbleWall, gx, gy)
             elif char == '*':
                 self.spawn(Star, gx, gy)
         playsounds('reset')
@@ -606,8 +616,12 @@ class World:
         nx = gx + dx
         ny = gy + dy
         if 0 <= nx < self.width and 0 <= ny < self.height:
-            if any(isinstance(obj, Wall) for obj in self.grid[nx, ny]):
-                return False
+            if any(isinstance(o, (BubbleWall, Wall)) for o in self.grid[nx, ny]):
+                if not (
+                    any(isinstance(o, BubbleWall) for o in self.grid[nx, ny]) and
+                    obj.frozen
+                ):
+                    return False
             self.grid[gx, gy].remove(obj)
             self.grid[nx, ny].add(obj)
             return True

@@ -78,9 +78,9 @@ maps = [
 
 """
             ###
-             r
-            #p#
-       ######p#
+            #r#
+            # #
+       ######%#
        #rrrrro#
        #rrrrr##
        #rrrrrr#
@@ -89,20 +89,46 @@ maps = [
        #rrrrrs#
        ########
 
+""",
+
+"""
+        #####
+        #pppp
+        #%#%#
+        #r#p#
+        #o#o#
+        #y#r#
+      s  o o
+
+
 
 """,
 
 """
-      ##################
-      #
-      #o#
-      #o#
-      #o#
-      #o#
-      #o#
-      #o#
+           p
+        ###r###
+       yyy#y#rrr
+      r #     # r
+        #%#%#%#
+      r #o o o# r
+        #  s  #
+      r ####### r
 
-       o
+
+
+""",
+
+"""
+      ##########r#
+      #yyyyyyyy#%#
+      #yrrrrrry#p#
+      #rryrryrr#p#
+      #rryyyyrr#p#
+      #yryyyyry#p#
+      #yrryyrryso#
+      #yyrrrryy###
+      #yyyrryyy#
+      ##########
 
 
 """,
